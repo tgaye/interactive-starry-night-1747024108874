@@ -1,0 +1,295 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Starry Night</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.8.0/lib/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+        }
+        #canvas-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            position: relative;
+        }
+    </style>
+
+<base target="_self">
+
+
+    </head><body><div id="canvas-container"></div>
+
+    <script>
+        const sketch = (p) => {
+            // Star system variables
+            let stars = [];
+            let shootingStars = [];
+            let ripples = [];
+            const maxStars = 800;
+            const maxShootingStars = 3;
+            const maxRipples = 10;
+            
+            // Color palettes
+            const starColors = [
+                p.color(255, 255, 255),
+                p.color(255, 240, 200),
+                p.color(200, 220, 255),
+                p.color(255, 200, 200)
+            ];
+            
+            // Background gradient colors
+            const bgColors = [
+                p.color(10, 15, 30),
+                p.color(5, 10, 25),
+                p.color(0, 5, 20)
+            ];
+            
+            p.setup = () => {
+                let canvas = p.createCanvas(p.windowWidth, p.windowHeight);
+                canvas.parent('canvas-container');
+                
+                // Initialize stars
+                for (let i = 0; i < maxStars; i++) {
+                    stars.push({
+                        x: p.random(p.width),
+                        y: p.random(p.height),
+                        size: p.random(0.5, 2.5),
+                        brightness: p.random(0.3, 1),
+                        twinkleSpeed: p.random(0.01, 0.05),
+                        twinkleOffset: p.random(p.TWO_PI),
+                        color: starColors[p.floor(p.random(starColors.length))]
+                    });
+                }
+                
+                // Initialize occasional shooting stars
+                setInterval(() => {
+                    if (shootingStars.length < maxShootingStars && p.random() > 0.8) {
+                        createShootingStar();
+                    }
+                }, 2000);
+            };
+            
+            p.draw = () => {
+                // Draw background gradient
+                drawGradientBackground();
+                
+                // Update and draw stars
+                updateStars();
+                
+                // Update and draw shooting stars
+                updateShootingStars();
+                
+                // Update and draw ripples
+                updateRipples();
+                
+                // Add subtle constellation effect when mouse moves
+                if (p.mouseX !== p.pmouseX || p.mouseY !== p.pmouseY) {
+                    maybeCreateRipple();
+                }
+            };
+            
+            function drawGradientBackground() {
+                // Create vertical gradient from dark blue to black
+                for (let y = 0; y < p.height; y++) {
+                    let inter = p.map(y, 0, p.height, 0, 1);
+                    let c = p.lerpColor(bgColors[0], bgColors[2], inter);
+                    p.stroke(c);
+                    p.line(0, y, p.width, y);
+                }
+                
+                // Add subtle horizon glow
+                let horizonGlow = p.height * 0.7;
+                for (let y = 0; y < horizonGlow; y++) {
+                    let alpha = p.map(y, 0, horizonGlow, 10, 0);
+                    p.stroke(100, 120, 255, alpha);
+                    p.line(0, p.height - y, p.width, p.height - y);
+                }
+            }
+            
+            function updateStars() {
+                for (let star of stars) {
+                    // Twinkle effect using sine wave
+                    let twinkle = p.sin(p.frameCount * star.twinkleSpeed + star.twinkleOffset) * 0.5 + 0.5;
+                    let currentBrightness = star.brightness * twinkle;
+                    
+                    // Draw star
+                    p.noStroke();
+                    let starColor = p.color(star.color);
+                    starColor.setAlpha(currentBrightness * 255);
+                    p.fill(starColor);
+                    p.circle(star.x, star.y, star.size * currentBrightness);
+                    
+                    // Add subtle glow
+                    if (currentBrightness > 0.7) {
+                        p.fill(starColor);
+                        starColor.setAlpha(20);
+                        p.circle(star.x, star.y, star.size * 4 * currentBrightness);
+                    }
+                }
+            }
+            
+            function updateShootingStars() {
+                for (let i = shootingStars.length - 1; i >= 0; i--) {
+                    let star = shootingStars[i];
+                    
+                    // Update position
+                    star.x += star.speedX;
+                    star.y += star.speedY;
+                    star.life -= 1;
+                    
+                    // Draw shooting star with tail
+                    p.noStroke();
+                    let alpha = p.map(star.life, star.maxLife, 0, 255, 0);
+                    p.fill(255, 255, 255, alpha);
+                    
+                    // Main body
+                    p.circle(star.x, star.y, star.size);
+                    
+                    // Tail
+                    let tailLength = star.size * 15;
+                    p.push();
+                    p.translate(star.x, star.y);
+                    p.rotate(p.atan2(star.speedY, star.speedX));
+                    p.beginShape();
+                    p.vertex(0, 0);
+                    p.vertex(-tailLength, -star.size/2);
+                    p.vertex(-tailLength * 0.7, 0);
+                    p.vertex(-tailLength, star.size/2);
+                    p.endShape(p.CLOSE);
+                    p.pop();
+                    
+                    // Remove if expired
+                    if (star.life <= 0) {
+                        shootingStars.splice(i, 1);
+                    }
+                }
+            }
+            
+            function updateRipples() {
+                for (let i = ripples.length - 1; i >= 0; i--) {
+                    let ripple = ripples[i];
+                    
+                    // Update ripple properties
+                    ripple.radius += ripple.expansionRate;
+                    ripple.alpha -= ripple.fadeRate;
+                    
+                    // Draw ripple
+                    p.noFill();
+                    p.stroke(255, 255, 255, ripple.alpha);
+                    p.strokeWeight(0.5);
+                    p.circle(ripple.x, ripple.y, ripple.radius * 2);
+                    
+                    // Draw faint outer ripple
+                    if (ripple.alpha > 50) {
+                        p.stroke(200, 220, 255, ripple.alpha * 0.3);
+                        p.circle(ripple.x, ripple.y, ripple.radius * 2.5);
+                    }
+                    
+                    // Remove if faded out
+                    if (ripple.alpha <= 0) {
+                        ripples.splice(i, 1);
+                    }
+                }
+            }
+            
+            function createShootingStar() {
+                // Random direction from top of screen
+                let angle = p.random(-p.PI/6, p.PI/6);
+                let speed = p.random(8, 15);
+                
+                shootingStars.push({
+                    x: p.random(p.width),
+                    y: -10,
+                    speedX: p.cos(angle) * speed,
+                    speedY: p.sin(angle) * speed,
+                    size: p.random(2, 4),
+                    life: p.random(60, 100),
+                    maxLife: 100
+                });
+            }
+            
+            function maybeCreateRipple() {
+                // Only create new ripple if not too many exist and random chance
+                if (ripples.length < maxRipples && p.random() > 0.7) {
+                    ripples.push({
+                        x: p.mouseX,
+                        y: p.mouseY,
+                        radius: 10,
+                        expansionRate: p.random(2, 4),
+                        alpha: p.random(100, 150),
+                        fadeRate: p.random(0.5, 1.5)
+                    });
+                    
+                    // Create constellation effect by connecting nearby stars
+                    if (p.random() > 0.5) {
+                        let nearbyStars = stars.filter(star => {
+                            let d = p.dist(p.mouseX, p.mouseY, star.x, star.y);
+                            return d < 150;
+                        });
+                        
+                        // Sort by distance and connect closest stars
+                        nearbyStars.sort((a, b) => {
+                            return p.dist(p.mouseX, p.mouseY, a.x, a.y) - 
+                                   p.dist(p.mouseX, p.mouseY, b.x, b.y);
+                        });
+                        
+                        // Connect up to 5 closest stars
+                        p.stroke(255, 255, 255, 80);
+                        p.strokeWeight(0.3);
+                        for (let i = 0; i < p.min(5, nearbyStars.length - 1); i++) {
+                            p.line(nearbyStars[i].x, nearbyStars[i].y, 
+                                   nearbyStars[i+1].x, nearbyStars[i+1].y);
+                        }
+                    }
+                }
+            }
+            
+            p.mousePressed = () => {
+                // Create stronger ripple on click
+                if (ripples.length < maxRipples) {
+                    ripples.push({
+                        x: p.mouseX,
+                        y: p.mouseY,
+                        radius: 5,
+                        expansionRate: 5,
+                        alpha: 200,
+                        fadeRate: 1
+                    });
+                }
+                
+                // Sometimes create shooting star from click point
+                if (p.random() > 0.7 && shootingStars.length < maxShootingStars) {
+                    let angle = p.random(p.PI/4, (3*p.PI)/4);
+                    let speed = p.random(10, 20);
+                    
+                    shootingStars.push({
+                        x: p.mouseX,
+                        y: p.mouseY,
+                        speedX: p.cos(angle) * speed,
+                        speedY: p.sin(angle) * speed,
+                        size: p.random(3, 6),
+                        life: p.random(40, 80),
+                        maxLife: 80
+                    });
+                }
+            };
+            
+            p.windowResized = () => {
+                p.resizeCanvas(p.windowWidth, p.windowHeight);
+            };
+        };
+
+        new p5(sketch);
+    </script>
+
+              
+          
+                
+          
+              
+</body></html>
